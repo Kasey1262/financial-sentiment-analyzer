@@ -1,21 +1,20 @@
 import streamlit as st
 from analyzer import analyze_sentiment
 
-# 页面配置
 st.set_page_config(page_title="Financial News Sentiment Analyzer", page_icon="📈")
 
 st.title("📈 Financial News Sentiment Analyzer")
 st.caption("Powered by Claude API | Built by Kasey Yin")
 
-# 文本输入框
 news_text = st.text_area(
     "Paste a financial news article or headline:",
     height=200,
-    placeholder="e.g. The Federal Reserve announced today it will hold interest rates steady..."
+    placeholder="e.g. The Federal Reserve announced today it will hold interest rates steady...",
+    key="news_input",
 )
 
-# 分析按钮
 if st.button("Analyze Sentiment", type="primary"):
+    st.session_state["analysis_error"] = None
     if not news_text.strip():
         st.warning("Please paste some news text first.")
     else:
@@ -23,26 +22,50 @@ if st.button("Analyze Sentiment", type="primary"):
             result = analyze_sentiment(news_text)
 
         if result["sentiment"] == "error":
-            st.error(result["summary"])
+            st.session_state["analysis_error"] = result["summary"]
         else:
-            # 根据情绪选颜色
-            sentiment = result["sentiment"]
-            if sentiment == "bullish":
-                st.success(f"**Sentiment: {sentiment.upper()}** 🐂")
-            elif sentiment == "bearish":
-                st.error(f"**Sentiment: {sentiment.upper()}** 🐻")
-            else:
-                st.info(f"**Sentiment: {sentiment.upper()}** ➖")
+            st.session_state["last_analysis"] = {
+                "news_text": news_text,
+                "result": result,
+            }
 
-            # 置信度进度条
-            st.metric("Confidence", f"{result['confidence']}%")
-            st.progress(result["confidence"] / 100)
+analysis_error = st.session_state.get("analysis_error")
+if analysis_error:
+    st.error(analysis_error)
 
-            # 关键因素
-            st.subheader("Key Factors")
-            for factor in result["key_factors"]:
-                st.markdown(f"- {factor}")
+last_analysis = st.session_state.get("last_analysis")
+if last_analysis:
+    st.subheader("Last successful analysis")
+    if analysis_error:
+        st.caption(
+            "The latest request failed. Your last successful analysis is still shown below."
+        )
+    elif news_text != last_analysis["news_text"]:
+        st.caption(
+            "You are viewing the last analyzed text. Submit your edits to update the results."
+        )
 
-            # 总结
-            st.subheader("Investment Interpretation")
-            st.write(result["summary"])
+    with st.expander("Analyzed news", expanded=True):
+        st.text(last_analysis["news_text"])
+
+    result = last_analysis["result"]
+    sentiment = result["sentiment"]
+    if sentiment == "bullish":
+        st.success(f"**Sentiment: {sentiment.upper()}** 🐂")
+    elif sentiment == "bearish":
+        st.error(f"**Sentiment: {sentiment.upper()}** 🐻")
+    else:
+        st.info(f"**Sentiment: {sentiment.upper()}** ➖")
+
+    st.metric("Model confidence (self-assessed)", f"{result['confidence']}%")
+    st.caption("This is the model's self-assessment, not a verified probability.")
+    st.progress(result["confidence"] / 100)
+
+    st.subheader("Key Factors")
+    for index, factor in enumerate(result["key_factors"], start=1):
+        st.write(f"{index}. {factor['factor']}")
+        st.caption("Source quote")
+        st.text(factor["quote"])
+
+    st.subheader("Investment Interpretation")
+    st.write(result["summary"])

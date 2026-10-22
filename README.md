@@ -4,14 +4,16 @@ A web app that analyzes financial news sentiment using the Anthropic Claude API.
 Paste any financial news article or headline and get structured sentiment analysis
 in seconds.
 
-**[Live Demo](https://financial-sentiment-analyzer-eagekrw4sepf54rx35bgve.streamlit.app/)
+**[Live Demo](https://financial-sentiment-analyzer-eagekrw4sepf54rx35bgve.streamlit.app/)**
 
 ## Features
 
-- **Sentiment classification** — bullish / bearish / neutral with confidence score
-- **Key factor extraction** — identifies 2-4 key market drivers or risks from the text
-- **Investment interpretation** — one-sentence actionable summary
-- **Structured JSON output** — enforced via prompt engineering for reliable parsing
+- **Sentiment classification** — bullish / bearish / neutral with a model self-assessed confidence score
+- **Traceable factors** — 2-4 drivers or risks, each paired with an exact quote from the submitted news
+- **Interpretation** — a short summary of the supplied news, including mixed signals when present
+- **Validated output** — API-level JSON schema plus local checks of fields, ranges, and source quotes
+- **Persistent results** — the last successful analysis stays visible while editing or after a failed request, with its original news clearly shown
+- **Recoverable errors** — readable messages for missing credentials, service failures, invalid results, and unverifiable quotes
 
 ## Tech Stack
 
@@ -19,14 +21,39 @@ in seconds.
 - **Anthropic Claude API** — LLM-powered analysis with structured prompt design
 - **Streamlit** — web interface and cloud deployment
 - **python-dotenv** — local secrets management
+- **Pydantic** — strict response validation
 
 ## How It Works
 
 1. User pastes financial news text
-2. A structured system prompt instructs Claude to return strict JSON
-   (sentiment, confidence, key factors, summary)
-3. Response is cleaned (markdown fence stripping) and parsed with error handling
-4. Results are rendered with color-coded sentiment indicators
+2. Claude receives a JSON schema for sentiment, confidence, factor/quote pairs, and summary
+3. The response is checked for valid fields, labels, finite confidence in 0-100,
+   2-4 factors, and nonblank text; every quote must occur verbatim in the input
+4. Streamlit saves a successful result and its submitted news in session state,
+   then renders the interpretation and supporting quotes independently of the button
+
+Matching a quote verifies that it came from the input, not that the factor's
+interpretation is correct. The confidence score is model self-assessment; it is
+not a calibrated probability of correctness or future investment returns.
+
+`analyze_sentiment(text)` still returns a dictionary with `sentiment`,
+`confidence`, `key_factors`, and `summary`. Each successful `key_factors` item
+is now `{"factor": "...", "quote": "exact text from the news"}` rather than a
+string. Expected failures use `sentiment: "error"`, a readable `summary`, zero
+confidence, and an empty factor list. The existing evaluation script uses the
+unchanged sentiment/confidence fields.
+
+## Offline checks
+
+```bash
+python3 -m unittest discover -s tests -v
+```
+
+These tests use mocked provider responses and Streamlit's AppTest. They require
+no API key and make no model calls. They cover response validation, source-quote
+matching, expected service failures, rendering, and retention of the previous
+successful result. Session state lasts for the current browser connection; it
+does not provide history across browser reloads or separate sessions.
 
 ## Validation
 
@@ -39,7 +66,12 @@ confidence-vs-correctness check.
 
 **Reproduce:** `python3 evaluate.py` (from the repo root, with your `.env` set).
 
-### Results (30 hand-labeled items)
+### Historical baseline results (30 hand-labeled items)
+
+The results below were reported for the earlier prompt and output format. They
+have not been rerun for the evidence-backed schema in this revision. Running
+`evaluate.py` uses the configured Claude account and incurs API usage; offline
+tests do not establish model accuracy.
 
 **Overall accuracy: 28/30 = 93.3%** — 0 parse errors (the JSON cleaning/error
 handling held on every response).
@@ -62,17 +94,15 @@ Per-class:
 
 ### What the results show
 
-- **Perfect precision on bullish and bearish (1.00):** the model never confused a
-  positive story for a negative one, or vice versa. Both of its errors were
-  directional items it labeled *neutral* — so its failure mode is being
-  **conservative**, not reckless, which is the safer direction to err for a
-  sentiment signal.
+- **Precision on bullish and bearish was 1.00 on this set:** both errors were
+  directional items labeled *neutral*. This small result does not establish a
+  generally safer investment signal.
 - **Both misses were deliberately mixed-signal cases** (e.g. earnings and price
   action pointing in opposite directions), and the model reported low confidence
   on both — it was uncertain exactly where a human would be.
-- **Confidence carries real information:** average confidence was **83.8 when
-  correct** vs **72.0 when wrong**, so higher confidence does track with being
-  right on this set.
+- **Confidence differed between outcomes:** average confidence was **83.8 when
+  correct** vs **72.0 when wrong**. Comparing these averages does not establish
+  probability calibration.
 
 ### Limitations & next steps
 
@@ -80,8 +110,8 @@ This is a **small, single-annotator** evaluation, so the numbers are indicative,
 not a rigorous benchmark. Planned next steps: (1) scale to a larger labelled set
 for statistically meaningful per-class metrics; (2) add a second annotator and
 measure agreement on the ambiguous cases; (3) formally test confidence
-calibration; and (4) move schema enforcement to the API's structured-output /
-tool-use feature to further reduce parse risk.
+calibration; and (4) rerun the evaluation after prompt or schema changes. API
+schema enforcement and local output validation are now implemented.
 
 ## Run Locally
 
