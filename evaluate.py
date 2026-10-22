@@ -98,14 +98,14 @@ def per_class_metrics(results):
 
 
 def confidence_analysis(results):
-    """Is the model more confident when it's actually right? (calibration signal)"""
+    """Compare self-assessed scores by outcome; this does not test calibration."""
     conf_right = [r["conf"] for r in results if r["correct"]]
     conf_wrong = [r["conf"] for r in results if not r["correct"] and r["pred"] != "error"]
     avg = lambda xs: sum(xs) / len(xs) if xs else float("nan")
     print("\nConfidence vs correctness")
     print(f"  avg confidence when CORRECT : {avg(conf_right):5.1f}  (n={len(conf_right)})")
     print(f"  avg confidence when WRONG   : {avg(conf_wrong):5.1f}  (n={len(conf_wrong)})")
-    print("  (If 'correct' isn't clearly higher, the confidence score isn't well calibrated.)")
+    print("  (These averages describe score separation, not calibrated probabilities.)")
 
 
 def main():
@@ -119,7 +119,7 @@ def main():
     print("\n" + "=" * 46)
     print(f"Overall accuracy: {n_correct}/{n} = {n_correct / n:.1%}")
     if n_error:
-        print(f"Parse errors (model returned no valid JSON): {n_error}")
+        print(f"Analysis errors (invalid results or service failures): {n_error}")
     print("=" * 46)
 
     print_confusion(confusion_matrix(results))
